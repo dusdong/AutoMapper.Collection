@@ -2,13 +2,20 @@
 set -euo pipefail
 
 usage() {
-    echo '用法：bash pack-r3-candidate.sh <11.0.0-r3.N> <引擎 nupkg> <引擎 SHA-256> <新输出目录>' >&2
+    echo '用法：bash pack-r3-candidate.sh <11.0.0-r3.N | --r4> <引擎 nupkg> <引擎 SHA-256> <新输出目录>' >&2
     exit 2
 }
 
-[[ $# -eq 4 && "$1" =~ ^11[.]0[.]0-r3[.]([1-9][0-9]*)$ ]] || usage
-version=$1
-engine_version="14.0.0-r3.${BASH_REMATCH[1]}"
+[[ $# -eq 4 ]] || usage
+if [[ "$1" == --r4 ]]; then
+    version=11.0.0
+    engine_version=14.0.0
+elif [[ "$1" =~ ^11[.]0[.]0-r3[.]([1-9][0-9]*)$ ]]; then
+    version=$1
+    engine_version="14.0.0-r3.${BASH_REMATCH[1]}"
+else
+    usage
+fi
 engine=$2
 engine_sha=$3
 engine_name="Du.AutoMapper.$engine_version.nupkg"
@@ -20,6 +27,13 @@ if [[ "${actual_sha%% *}" != "$engine_sha" ]]; then
 fi
 
 source=$(cd "$(dirname "$0")" && pwd -P)
+if [[ "$1" == --r4 ]]; then
+    if [[ -n "$(git -C "$source" status --porcelain=v1 --untracked-files=all)" ]]; then
+        echo 'R4 需要干净的生产提交。' >&2
+        exit 1
+    fi
+    commit=$(git -C "$source" rev-parse HEAD)
+fi
 dotnet=${DOTNET:-dotnet}
 mkdir -- "$4"
 output=$(cd "$4" && pwd -P)
@@ -61,6 +75,10 @@ project="$source/src/AutoMapper.Collection/AutoMapper.Collection.csproj"
 tests="$source/src/AutoMapper.Collection.Tests/AutoMapper.Collection.Tests.csproj"
 properties=(-p:Configuration=Release -p:UseSharedCompilation=false "-p:ArtifactsPath=$output/artifacts"
     -p:DuR3CollectionCandidate=true "-p:DuR3CollectionEngineVersion=$engine_version" "-p:MinVerVersionOverride=$version")
+if [[ "$1" == --r4 ]]; then
+    printf '%s\n' "$commit" > source-commit.txt
+    properties+=(-p:DuR4Pack=true "-p:RepositoryCommit=$commit")
+fi
 run sdk "$dotnet" --info
 run restore "$dotnet" restore "$tests" "${properties[@]}" --configfile "$output/NuGet.Config" --disable-build-servers
 run test "$dotnet" test "$tests" "${properties[@]}" --no-restore --disable-build-servers --verbosity normal \
