@@ -19,12 +19,20 @@
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(DuR3CollectionCandidate)' == 'true'">
+    <PackageId>Du.AutoMapper.Collection</PackageId>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/dusdong/AutoMapper.Collection.git</RepositoryUrl>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Include="..\..\icon.png" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" Condition="'$(DuR3CollectionCandidate)' == 'true'" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoMapper" Version="[14.0.0, 15.0.0)" />
+    <PackageReference Include="AutoMapper" Version="[14.0.0, 15.0.0)" Condition="'$(DuR3CollectionCandidate)' != 'true'" />
+    <PackageReference Include="Du.AutoMapper" Version="[$(DuR3CollectionEngineVersion)]" Condition="'$(DuR3CollectionCandidate)' == 'true'" />
     <PackageReference Include="MinVer" Version="2.3.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
