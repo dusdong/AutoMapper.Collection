@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-    echo '用法：bash pack-r3-candidate.sh <11.0.0-r3.N | --r4> <引擎 nupkg> <引擎 SHA-256> <新输出目录>' >&2
+    echo '用法：bash pack-r3-candidate.sh <11.0.0-r3.N | --r4 | --r5> <引擎 nupkg> <引擎 SHA-256> <新输出目录>' >&2
     exit 2
 }
 
@@ -10,6 +10,9 @@ usage() {
 if [[ "$1" == --r4 ]]; then
     version=11.0.0
     engine_version=14.0.0
+elif [[ "$1" == --r5 ]]; then
+    version=11.0.1
+    engine_version=14.0.1
 elif [[ "$1" =~ ^11[.]0[.]0-r3[.]([1-9][0-9]*)$ ]]; then
     version=$1
     engine_version="14.0.0-r3.${BASH_REMATCH[1]}"
@@ -32,8 +35,8 @@ if [[ "$1" == --r4 ]]; then
         echo 'R4 需要干净的生产提交。' >&2
         exit 1
     fi
-    commit=$(git -C "$source" rev-parse HEAD)
 fi
+commit=$(git -C "$source" rev-parse HEAD)
 dotnet=${DOTNET:-dotnet}
 mkdir -- "$4"
 output=$(cd "$4" && pwd -P)
@@ -53,6 +56,7 @@ cat > NuGet.Config <<'EOF'
     <packageSource key="inputs"><package pattern="Du.AutoMapper" /></packageSource>
     <packageSource key="nuget.org"><package pattern="*" /></packageSource>
   </packageSourceMapping>
+  <fallbackPackageFolders><clear /></fallbackPackageFolders>
 </configuration>
 EOF
 
@@ -75,9 +79,13 @@ project="$source/src/AutoMapper.Collection/AutoMapper.Collection.csproj"
 tests="$source/src/AutoMapper.Collection.Tests/AutoMapper.Collection.Tests.csproj"
 properties=(-p:Configuration=Release -p:UseSharedCompilation=false "-p:ArtifactsPath=$output/artifacts"
     -p:DuR3CollectionCandidate=true "-p:DuR3CollectionEngineVersion=$engine_version" "-p:MinVerVersionOverride=$version")
-if [[ "$1" == --r4 ]]; then
+if [[ "$1" == --r4 || "$1" == --r5 ]]; then
     printf '%s\n' "$commit" > source-commit.txt
     properties+=(-p:DuR4Pack=true "-p:RepositoryCommit=$commit")
+fi
+if [[ "$1" == --r5 ]]; then
+    sed -e "s/14\.0\.0/$engine_version/g" -e "s/11\.0\.0/$version/g" "$source/README.package.md" > README.md
+    properties+=("-p:DuR4Readme=$output/README.md" -p:MinVerAssemblyVersion=11.0.0.0)
 fi
 run sdk "$dotnet" --info
 run restore "$dotnet" restore "$tests" "${properties[@]}" --configfile "$output/NuGet.Config" --disable-build-servers
